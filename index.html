@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>Discord Webhooks</title>
+    </head>
+
+    <style>
+        html,
+        body {
+            background-color: #2d3136;
+            color: white;
+            font-family: monospace;
+        }
+
+        .container {
+            margin: 2vh 15vw;
+        }
+
+        input,
+        textarea {
+            background-color: #41434b;
+            border: none;
+            color: white;
+            font-family: monospace;
+            font-size: 150%;
+            padding: 0.2em 0.5em;
+        }
+
+        input:disabled {
+            background-color: #41434b55;
+        }
+
+        ::placeholder {
+            color: white;
+        }
+
+        button {
+            background-color: #55b;
+            border: none;
+            color: white;
+            font-family: monospace;
+            font-size: 120%;
+            border-radius: 5px;
+            padding: 0.4em 1em;
+        }
+
+        button:hover {
+            background-color: #44a;
+        }
+
+        button:active {
+            background-color: #339;
+        }
+    </style>
+
+    <body>
+        <noscript>
+            <div
+                style="
+                    position: absolute;
+                    width: 100vw;
+                    height: 100vh;
+                    margin: 0;
+                    top: 0;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    z-index: 1;
+                    background-color: #2d3136bb;
+                    text-align: center;
+                    font-size: 250%;
+                "
+            >
+                <div style="margin-top: calc(50vh - 1em)">
+                    Please enable JavaScript.
+                </div>
+            </div>
+        </noscript>
+
+        <div class="container">
+            <input
+                id="url"
+                type="password"
+                placeholder="Webhook URL"
+                style="width: 100%"
+                autocomplete="off"
+            />
+            <br /><br />
+            <textarea
+                id="body"
+                placeholder="JSON"
+                style="width: 100%; height: 15em"
+                autocomplete="off"
+            ></textarea>
+            <br /><br />
+            <input
+                id="message"
+                type="text"
+                placeholder="Message ID / URL"
+                style="width: 100%"
+                autocomplete="off"
+            />
+            <br /><br />
+            <input
+                id="thread_name"
+                type="text"
+                placeholder="Forum Post Name"
+                style="width: 100%"
+                autocomplete="off"
+            />
+            <br /><br />
+            <input
+                id="thread_id"
+                type="text"
+                placeholder="Thread / Post ID / URL"
+                style="width: 100%"
+                autocomplete="off"
+            />
+            <br /><br />
+            <button id="execute" onclick="execute();">SEND</button>
+        </div>
+    </body>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            document
+                .getElementById("message")
+                .addEventListener("input", function () {
+                    document.getElementById("execute").innerHTML = this.value
+                        ? "EDIT"
+                        : "SEND";
+
+                    document.getElementById("thread_name").disabled =
+                        !!this.value;
+                });
+        });
+
+        async function execute() {
+            const url = document.getElementById("url").value;
+
+            if (!url) return alert("Missing webhook URL.");
+
+            if (
+                !url.match(
+                    /^https:\/\/(discordapp|discord|ptb\.discord|canary\.discord)\.com\/api\/webhooks\/\d+\/[^\/]+\/?$/
+                )
+            ) {
+                return alert("That is not a valid webhook URL.");
+            }
+
+            const raw = document.getElementById("body").value;
+            if (!raw) return alert("Missing message data.");
+
+            let json;
+
+            try {
+                json = JSON.parse(raw);
+            } catch {
+                return alert("Invalid message JSON.");
+            }
+
+            const target = document.getElementById("message").value;
+
+            let message;
+
+            if (target) {
+                let match;
+
+                if (
+                    (match = target.match(
+                        /^https:\/\/(discordapp|discord|ptb\.discord|canary\.discord)\.com\/channels\/\d+\/\d+\/(\d+)/
+                    ))
+                ) {
+                    message = match[2];
+                } else if (target.match(/\d+/)) {
+                    message = target;
+                } else {
+                    return alert("Invalid message URL / ID.");
+                }
+            }
+
+            const thread_name =
+                !message && document.getElementById("thread_name").value;
+
+            if (thread_name) json.thread_name = thread_name;
+
+            const thread = document.getElementById("thread_id").value;
+
+            let thread_id;
+
+            if (thread) {
+                let match;
+
+                if (
+                    (match = thread.match(
+                        /^https:\/\/(discordapp|discord|ptb\.discord|canary\.discord)\.com\/channels\/\d+\/(\d+)/
+                    ))
+                ) {
+                    thread_id = match[2];
+                } else if (thread.match(/\d+/)) {
+                    thread_id = thread;
+                } else {
+                    return alert("Invalid thread / post URL / ID.");
+                }
+            }
+
+            const response = await fetch(
+                message
+                    ? `${url}${
+                          url.endsWith("/") ? "" : "/"
+                      }messages/${message}${
+                          thread_id ? `?thread_id=${thread_id}` : ""
+                      }`
+                    : `${url}?wait=true${
+                          thread_id ? `&thread_id=${thread_id}` : ""
+                      }`,
+                {
+                    method: message ? "PATCH" : "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(json),
+                }
+            );
+
+            const data =
+                message && response.status == 200
+                    ? null
+                    : await response.json();
+
+            if (response.status == 200) {
+                if (message) return alert("Message edited successfully!");
+
+                document.getElementById("message").value = data.id;
+
+                if (thread_name) {
+                    document.getElementById("thread_id").value =
+                        data.channel_id;
+                }
+
+                document.getElementById("execute").innerHTML = "EDIT";
+                document.getElementById("thread_name").disabled = true;
+
+                console.log(data);
+
+                alert("Message sent successfully!");
+            } else {
+                alert(`[ERROR] ${data.message}`);
+            }
+        }
+    </script>
+</html>
